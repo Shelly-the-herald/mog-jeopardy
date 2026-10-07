@@ -58,16 +58,10 @@
   </div>
 
 
-  <div class="pic-box" id="box1" onclick="chooseWinner(1)"><img src="pic1.jpg"></div>
-  <div class="pic-box" id="box2" onclick="chooseWinner(2)"><img src="pic2.jpg"></div>
-  <div class="pic-box" id="box3" onclick="chooseWinner(3)"><img src="pic3.jpg"></div>
-
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       init()
     })
-    const faceapi = require('face-api.js/build/face-api.node.js');
-    const path = require('path');
     const delay = ms => new Promise(res => setTimeout(res, ms))
 
     async function readQuestion(words) {
@@ -87,10 +81,6 @@
     }
 
     function chooseWinner(num) {
-      document.getElementById('box1').className = 'pic-box loser';
-      document.getElementById('box2').className = 'pic-box loser';
-      document.getElementById('box3').className = 'pic-box loser';
-      document.getElementById('box' + num).className = 'pic-box winner';
       document.getElementById('myDIV').innerHTML = 'Contestant ' + num + ' MOGGED!';
       document.getElementById('myDIV').style.visibility = "visible"
       var box = document.getElementById('myVideoBox');
