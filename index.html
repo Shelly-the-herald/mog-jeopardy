@@ -99,8 +99,8 @@
 
     async function init() {
       await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri('mog-jeopardy/models'),
-        faceapi.nets.faceLandmark68Net.loadFromUri('mog-jeopardy/models')
+        faceapi.nets.tinyFaceDetector.loadFromUri('https://shelly-the-herald.github.io/mog-jeopardy/models'),
+        faceapi.nets.faceLandmark68Net.loadFromUri('https://shelly-the-herald.github.io/mog-jeopardy/models')
       ])
     }
 
