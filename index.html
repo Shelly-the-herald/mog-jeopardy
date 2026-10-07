@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+
+  <!-- Load face-api.js from CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #111;
+      color: white;
+      font-family: Arial;
+    }
+
+    #myDIV {
+      font-size: 40px;
+      font-weight: bold;
+      visibility: hidden;
+    }
+
+
+    .container {
+      position: relative;
+      width: 720px;
+      height: 560px;
+    }
+
+    #video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      /* canvas above video */
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Mog Jeopardy</h2>
+  <div id="myDIV">Winner:</div>
+  <button onclick="startVideo()">Start Game</button>
+
+  <div id="question"></div>
+  <div id="countdown"></div>
+  <div class="container">
+    <video id="video" width="720" height="560" autoplay muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      init()
+    })
+
+    const delay = ms => new Promise(res => setTimeout(res, ms))
+
+    async function readQuestion(words) {
+      var c = document.getElementById('countdown')
+      /*var q = document.getElementById('question')
+      
+      q.innerHTML = 'Question: '
+      for (var i = 0; i < words.length; i++) {
+        await delay(250)
+        q.innerHTML += (words[i] + ' ')
+      }
+      await delay(250)*/
+      c.innerHTML = 'Start Mogging in...'
+      for (var i = 3; i > 0; i--) {
+        await delay(1000)
+        c.innerHTML = 'Start Mogging in ' + i + '...'
+      }
+    }
+
+    function chooseWinner(num) {
+      document.getElementById('myDIV').innerHTML = 'Contestant ' + num + ' MOGGED!';
+      document.getElementById('myDIV').style.visibility = "visible"
+      var box = document.getElementById('myVideoBox');
+      box.innerHTML = '<video id="mogVideo" width="560" height="315" autoplay controls playsinline><source src="https://www.youtube.com/watch?v=rE8IsP0E190" type="video/webm"></video>';
+      box.style.display = 'block';
+      var v = document.getElementById('mogVideo');
+      v.volume = 1;
+      v.muted = false;
+      v.play();
+    }
+
+    async function init() {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri('https://shelly-the-herald.github.io/mog-jeopardy/models'),
+        faceapi.nets.faceLandmark68Net.loadFromUri('https://shelly-the-herald.github.io/mog-jeopardy/models')
+      ])
+    }
+
+    async function startVideo() {
+      var testQuestion = []
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: {} })
+      const video = document.getElementById('video')
+      video.srcObject = stream
+      video.style.visibility = "visible"
+      document.getElementById('myDIV').style.visibility = "hidden"
+      document.getElementById('overlay').style.visibility = "hidden"
+      await readQuestion(testQuestion)
+      takeSnapshot()
+    }
+
+    async function takeSnapshot() {
+      const video = document.getElementById('video')
+      const canvas = document.getElementById('overlay')
+      const ctx = canvas.getContext('2d')
+
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      canvas.style.visibility = "visible"
+      // Draw current video frame onto canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      video.style.visibility = "hidden"
+      // Run detection on the canvas snapshot
+      runJawOverlay(canvas)
+    }
+
+    function linReg(points) {
+      var xsum = 0, ysum = 0, xsquaredsum = 0, xysum = 0
+      for (var i = 0; i < points.length; i++) {
+        xsum += points[i].x
+        ysum += points[i].y
+        xsquaredsum += points[i].x * points[i].x
+        xysum += points[i].x * points[i].y
+      }
+      var xmean = xsum / points.length
+      var ymean = ysum / points.length
+      var b = (ysum * xsquaredsum - xsum * xysum) / (points.length * xsquaredsum - xsum * xsum)
+      var a = (points.length * xysum - xsum * ysum) / (points.length * xsquaredsum - xsum * xsum)
+
+      var actVal = []
+      var predVal = []
+      for (var i = 0; i < points.length; i++) {
+        actVal.push(points[i].y)
+        predVal.push(points[i].x * a + b)
+      }
+      return [ymean, actVal, predVal]
+    }
+
+    function rSquare(yVals) {
+      var ymean = yVals[0]
+      var actVal = yVals[1]
+      var predVal = yVals[2]
+
+      var ess = 0
+      var tss = 0
+      for (var i = 0; i < actVal.length; i++) {
+        ess += (predVal[i] - ymean) ** 2
+        tss += (actVal[i] - ymean) ** 2
+      }
+      return ess / tss
+    }
+
+    async function detectJawOnly(canvas) {
+      const detection = await faceapi
+        .detectAllFaces(
+          canvas,
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 512,
+            scoreThreshold: 0.5
+          })
+        )
+        .withFaceLandmarks()
+
+      if (!detection || detection.length === 0) return null
+
+      detection.sort((a, b) => a.detection.box.x - b.detection.box.x)
+      console.log(detection.length)
+      const slices = []
+      for (var i = 0; i < detection.length; i++) {
+        const jaw = detection[i].landmarks.getJawOutline()
+        /*const response1 = rSquare(linReg(jaw.slice(0, 4)))
+        const response2 = rSquare(linReg(jaw.slice(4, 9)))
+        console.log((response1 * response2) * 100 + '%')*/
+        slices.push(jaw.slice(0, 9))
+      }
+      return slices
+    }
+
+    function drawJaw(canvas, jawPoints, reg) {
+      const ctx = canvas.getContext('2d')
+      ctx.strokeStyle = 'lime'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(jawPoints[0].x, jawPoints[0].y)
+      for (let i = 1; i <= Math.trunc((jawPoints.length) / 2); i++) {
+        ctx.lineTo(jawPoints[i].x, jawPoints[i].y)
+      }
+      ctx.stroke()
+
+      ctx.strokeStyle = 'red'
+      ctx.beginPath()
+      ctx.moveTo(jawPoints[Math.trunc(jawPoints.length / 2)].x, jawPoints[Math.trunc(jawPoints.length / 2)].y)
+      for (let i = Math.trunc((jawPoints.length) / 2) + 1; i < jawPoints.length; i++) {
+        ctx.lineTo(jawPoints[i].x, jawPoints[i].y)
+      }
+      ctx.stroke()
+
+      ctx.fillText(reg, jawPoints[5].x, jawPoints[5].y)
+    }
+
+    async function runJawOverlay(canvas) {
+      const jawSlices = await detectJawOnly(canvas)
+      if (!jawSlices) return
+      var regressions = []
+      for (var i = 0; i < jawSlices.length; i++) {
+        var response1 = rSquare(linReg(jawSlices[i].slice(0, 4)))
+        //console.log(response1)
+        var response2 = rSquare(linReg(jawSlices[i].slice(4, 9)))
+        //console.log(response2)
+        var reg = Math.trunc(response1 * response2 * 10000) / 100
+        //console.log(reg)
+        regressions.push(reg)
+        drawJaw(canvas, jawSlices[i], reg + '%')
+      }
+      console.log(regressions)
+      console.log(Math.max(regressions))
+      console.log(regressions.indexOf(Math.max(regressions)))
+      chooseWinner(regressions.indexOf(Math.max(regressions)) + 1)
+    }
+  </script>
+  <h3>For the best results, line up contestants so that their faces are centered and in a line.</h3>
+</body>
+
+</html>
